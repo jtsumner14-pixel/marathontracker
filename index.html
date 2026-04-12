@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Marathon Tracker">
+<meta name="theme-color" content="#0A0E1A">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Marathon Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0A0E1A;--surface:#111827;--surface2:#1C2333;--surface3:#252E42;
+  --accent:#FF6B35;--accent2:#FFB347;--blue:#4A9EFF;--green:#3DD68C;
+  --red:#FF5F5F;--purple:#A78BFA;--teal:#2DD4BF;
+  --text:#F0F4FF;--text2:#8B97B0;--text3:#4A5568;
+  --border:#1E2A3A;--border2:#2A3A52;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+  --r:12px;--r2:18px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);overflow:hidden}
+body{display:flex;flex-direction:column;max-width:430px;margin:0 auto}
+
+/* AUTH SCREEN */
+.auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;z-index:100;max-width:430px;margin:0 auto}
+.auth-screen.hidden{display:none}
+.auth-logo{font-size:48px;margin-bottom:8px}
+.auth-title{font-size:26px;font-weight:600;letter-spacing:-.5px;margin-bottom:4px}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:32px;text-align:center}
+.auth-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:24px;width:100%}
+.auth-tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:500;border-radius:10px;cursor:pointer;transition:.2s;color:var(--text2)}
+.auth-tab.active{background:var(--accent);color:#fff}
+.auth-form{width:100%;display:flex;flex-direction:column;gap:12px}
+.auth-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;color:var(--text);font-family:var(--font);font-size:15px;padding:13px 16px;outline:none}
+.auth-input:focus{border-color:var(--accent)}
+.auth-input::placeholder{color:var(--text3)}
+.auth-btn{width:100%;padding:14px;border-radius:12px;background:var(--accent);color:#fff;border:none;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;transition:.15s;margin-top:4px}
+.auth-btn:active{opacity:.85}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed}
+.auth-err{font-size:12px;color:var(--red);text-align:center;min-height:18px}
+.auth-divider{text-align:center;font-size:11px;color:var(--text3);margin:4px 0}
+
+/* UPDATE BANNER */
+.update-banner{position:fixed;top:0;left:50%;transform:translateX(-50%);max-width:430px;width:100%;background:var(--green);color:#000;font-size:13px;font-weight:500;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:200;display:none}
+.update-banner.show{display:flex}
+
+/* MAIN APP */
+.app{display:flex;flex-direction:column;height:100%;opacity:0;transition:.3s}
+.app.ready{opacity:1}
+.statusbar{padding:calc(var(--safe-top) + 8px) 20px 6px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text2);font-family:var(--mono);background:var(--bg);flex-shrink:0}
+.user-chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px 3px 5px;cursor:pointer}
+.user-avatar{width:18px;height:18px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff}
+.user-name{font-size:10px;color:var(--text2);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sync-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sync-dot.synced{background:var(--green)}
+.sync-dot.syncing{background:var(--accent2);animation:pulse 1s infinite}
+.sync-dot.offline{background:var(--text3)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.screens{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none;flex-direction:column;padding-bottom:16px}
+.screen::-webkit-scrollbar{display:none}
+.screen.active{display:flex}
+.nav{display:flex;background:var(--surface);border-top:1px solid var(--border);padding:8px 0 calc(var(--safe-bot) + 8px);flex-shrink:0}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 2px;cursor:pointer;border:none;background:none;color:var(--text3);font-family:var(--font);font-size:10px;font-weight:500;transition:.2s}
+.nav-btn.active{color:var(--accent)}
+.nav-btn svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+.hdr{padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0}
+.hdr h1{font-size:24px;font-weight:600;letter-spacing:-.5px;line-height:1.1}
+.hdr-sub{font-size:11px;color:var(--text2);margin-top:3px}
+.card{background:var(--surface);border-radius:var(--r2);margin:0 16px 12px;padding:16px;border:1px solid var(--border)}
+.card-title{font-size:11px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px 12px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:14px 12px}
+.metric-label{font-size:10px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.metric-val{font-size:24px;font-weight:600;line-height:1;letter-spacing:-1px;font-family:var(--mono)}
+.metric-sub{font-size:11px;color:var(--text2);margin-top:5px}
+.ring-card{background:var(--surface);border-radius:var(--r2);margin:0 16px 12px;padding:18px 16px;border:1px solid var(--border)}
+.ring-center{display:flex;justify-content:center;margin-bottom:14px}
+.ring-stats{display:flex;justify-content:space-around}
+.ring-stat{text-align:center}
+.ring-stat-val{font-size:15px;font-weight:600;font-family:var(--mono)}
+.ring-stat-lbl{font-size:10px;color:var(--text2);margin-top:2px}
+.chart-wrap{display:flex;align-items:flex-end;gap:4px;height:80px}
+.cbar-group{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cbar-inner{width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px;height:70px}
+.cbar{border-radius:3px 3px 0 0;min-height:2px;width:10px}
+.cbar-lbl{font-size:8px;color:var(--text3);font-family:var(--mono);margin-top:2px}
+.phase-badge{font-size:10px;font-weight:500;padding:3px 10px;border-radius:20px;display:inline-block}
+.phase-F{background:#1A3A5C;color:#4A9EFF}
+.phase-B{background:#1A3D2A;color:#3DD68C}
+.phase-P{background:#3D2A1A;color:#FFB347}
+.phase-T{background:#3D1A1A;color:#FF6B6B}
+.wk-sel{display:flex;align-items:center;gap:8px;margin:0 16px 12px}
+.wk-btn{width:40px;height:40px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;user-select:none}
+.wk-btn:active{background:var(--surface3)}
+.wk-info{flex:1;text-align:center}
+.wk-info h2{font-size:17px;font-weight:600}
+.wk-info p{font-size:11px;color:var(--text2);margin-top:2px}
+.day-row{padding:10px 0;border-bottom:1px solid var(--border)}
+.day-row:last-child{border-bottom:none}
+.day-top{display:flex;align-items:center;gap:8px}
+.day-d{font-size:11px;font-family:var(--mono);color:var(--text2);width:26px;flex-shrink:0}
+.day-info{flex:1;min-width:0}
+.day-act{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-date-lbl{font-size:10px;color:var(--text3);margin-top:1px}
+.day-sched{font-size:11px;font-family:var(--mono);color:var(--text3);width:34px;text-align:right;flex-shrink:0}
+.day-inputs{display:flex;gap:8px;margin-top:8px;padding-left:34px}
+.inp-group{flex:1;display:flex;flex-direction:column;gap:3px}
+.inp-label{font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px}
+.day-inp{width:100%;background:var(--surface3);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:var(--mono);font-size:14px;padding:7px 6px;text-align:center;outline:none;-webkit-appearance:none;appearance:none}
+.day-inp:focus{border-color:var(--accent);background:var(--surface2)}
+.day-inp::placeholder{color:var(--text3)}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pace-pill{display:flex;align-items:center;gap:5px;margin-top:7px;padding-left:34px;font-size:12px;font-family:var(--mono);color:var(--teal);transition:.2s;min-height:16px}
+.pace-pill.hidden{opacity:0}
+.pace-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.wk-total-banner{margin:0 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px}
+.wk-total-row{display:flex;justify-content:space-between;align-items:center}
+.wk-total-lbl{font-size:11px;color:var(--text2)}
+.wk-total-val{font-size:20px;font-weight:600;font-family:var(--mono);color:var(--accent)}
+.wk-diff{font-size:12px;font-family:var(--mono)}
+.wk-avg-pace{font-size:14px;font-weight:500;font-family:var(--mono);color:var(--teal)}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:14px;border-radius:var(--r);font-family:var(--font);font-size:15px;font-weight:500;cursor:pointer;border:none;transition:.15s}
+.btn:active{opacity:.8;transform:scale(.98)}
+.btn-primary{background:var(--accent);color:#fff;width:100%}
+.btn-row{margin:10px 16px 0;display:flex;gap:8px}
+.wk-list-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.wk-list-row:last-child{border-bottom:none}
+.wk-num-circle{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.wk-list-info{flex:1;min-width:0}
+.wk-list-name{font-size:13px;font-weight:500}
+.wk-list-dates{font-size:10px;color:var(--text2);margin-top:1px}
+.mini-prog{flex:1;max-width:72px}
+.mini-bar-bg{height:4px;background:var(--border2);border-radius:2px;overflow:hidden}
+.mini-bar-fill{height:4px;border-radius:2px;transition:.3s}
+.mini-pct{font-size:9px;color:var(--text2);text-align:right;margin-top:2px;font-family:var(--mono)}
+.now-badge{font-size:9px;padding:2px 6px;border-radius:8px;background:#FF6B3522;color:var(--accent);flex-shrink:0}
+.pace-tbl-row{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
+.pace-tbl-row:last-child{border-bottom:none}
+.ach-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ach{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px 8px;display:flex;align-items:center;gap:8px}
+.ach.locked{opacity:.3;filter:grayscale(1)}
+.ach-ico{font-size:22px;width:28px;text-align:center;flex-shrink:0}
+.ach-name{font-size:11px;font-weight:500;line-height:1.3}
+.ach-sub{font-size:9px;color:var(--text2);margin-top:2px}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(16px);font-size:13px;font-weight:500;padding:10px 22px;border-radius:30px;opacity:0;transition:.3s;pointer-events:none;white-space:nowrap;z-index:999;color:#000}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;gap:12px}
+.loading-overlay.hidden{display:none}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- UPDATE BANNER -->
+<div class="update-banner" id="update-banner">
+  <span>New version available!</span>
+  <button onclick="location.reload()" style="background:rgba(0,0,0,.2);border:none;color:#000;font-weight:600;font-size:12px;padding:4px 12px;border-radius:8px;cursor:pointer">Refresh</button>
+</div>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-logo">🏃</div>
+  <div class="auth-title">Marathon Tracker</div>
+  <div class="auth-sub">Sign in to sync your training<br>across all your devices</div>
+
+  <div class="auth-tabs">
+    <div class="auth-tab active" id="tab-signin" onclick="switchTab('signin')">Sign In</div>
+    <div class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Create Account</div>
+  </div>
+
+  <div class="auth-form">
+    <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email">
+    <input class="auth-input" type="password" id="auth-password" placeholder="Password" autocomplete="current-password">
+    <div id="auth-name-wrap" style="display:none">
+      <input class="auth-input" type="text" id="auth-name" placeholder="Your first name" autocomplete="given-name">
+    </div>
+    <div class="auth-err" id="auth-err"></div>
+    <button class="auth-btn" id="auth-submit" onclick="submitAuth()">Sign In</button>
+    <div class="auth-divider" id="auth-divider-note">No account yet? Switch to Create Account above</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--text2)">Loading your training data…</div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="app">
+  <div class="statusbar">
+    <span id="clock">9:41 AM</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="sync-dot synced" id="sync-dot"></div>
+      <div class="user-chip" onclick="showUserMenu()">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-name" id="user-name">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screens">
+
+    <!-- DASHBOARD -->
+    <div class="screen active" id="s-dash">
+      <div class="hdr">
+        <div><h1>Dashboard</h1><div class="hdr-sub" id="dash-date"></div></div>
+        <div style="text-align:right">
+          <div style="font-size:20px;font-weight:600;color:var(--accent);font-family:var(--mono)" id="days-left">—</div>
+          <div style="font-size:10px;color:var(--text2)">days to race</div>
+        </div>
+      </div>
+      <div class="ring-card">
+        <div class="ring-center">
+          <svg width="156" height="156" viewBox="0 0 156 156">
+            <defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FF6B35"/><stop offset="100%" stop-color="#FFB347"/></linearGradient></defs>
+            <circle cx="78" cy="78" r="66" fill="none" stroke="#1C2333" stroke-width="13"/>
+            <circle id="ring" cx="78" cy="78" r="66" fill="none" stroke="url(#rg)" stroke-width="13" stroke-linecap="round" stroke-dasharray="414.69" stroke-dashoffset="414.69" transform="rotate(-90 78 78)" style="transition:stroke-dashoffset 1.1s cubic-bezier(.4,0,.2,1)"/>
+            <text id="ring-pct" x="78" y="70" text-anchor="middle" fill="#F0F4FF" font-size="30" font-weight="600" font-family="DM Sans,sans-serif">0%</text>
+            <text x="78" y="87" text-anchor="middle" fill="#8B97B0" font-size="11" font-family="DM Sans,sans-serif">of plan complete</text>
+            <text id="ring-mi" x="78" y="104" text-anchor="middle" fill="#4A5568" font-size="10" font-family="DM Mono,monospace">0 / 0 mi</text>
+          </svg>
+        </div>
+        <div class="ring-stats">
+          <div class="ring-stat"><div class="ring-stat-val" id="r-thisweek" style="color:var(--blue)">0.0</div><div class="ring-stat-lbl">this week (mi)</div></div>
+          <div class="ring-stat"><div class="ring-stat-val" id="r-avgpace" style="color:var(--teal)">—</div><div class="ring-stat-lbl">avg pace</div></div>
+          <div class="ring-stat"><div class="ring-stat-val" id="r-longbest" style="color:var(--green)">0.0</div><div class="ring-stat-lbl">best long run</div></div>
+        </div>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><div class="metric-label">Total Miles</div><div class="metric-val" id="m-act" style="color:var(--accent)">0.0</div><div class="metric-sub">of <span id="m-sched">0</span> sched</div></div>
+        <div class="metric"><div class="metric-label">Weeks Logged</div><div class="metric-val" id="m-wks" style="color:var(--blue)">0</div><div class="metric-sub">of 31 total</div></div>
+        <div class="metric"><div class="metric-label">Ahead / Behind</div><div class="metric-val" id="m-diff">+0</div><div class="metric-sub">vs schedule</div></div>
+        <div class="metric"><div class="metric-label">Best Pace</div><div class="metric-val" id="m-bestpace" style="color:var(--teal);font-size:18px">—</div><div class="metric-sub">min / mile</div></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div class="card-title" style="margin:0">Recent Weeks</div>
+          <div style="display:flex;gap:10px;font-size:10px;color:var(--text2)">
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--border2);margin-right:3px"></span>sched</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:3px"></span>actual</span>
+          </div>
+        </div>
+        <div class="chart-wrap" id="chart"></div>
+      </div>
+      <div class="card"><div class="card-title">Achievements</div><div class="ach-grid" id="ach-grid"></div></div>
+    </div>
+
+    <!-- LOG MILES -->
+    <div class="screen" id="s-log">
+      <div class="hdr"><div><h1>Log Miles</h1><div class="hdr-sub">Miles + minutes → pace auto-calculates</div></div></div>
+      <div class="wk-sel">
+        <div class="wk-btn" id="prev-wk">‹</div>
+        <div class="wk-info"><h2 id="log-wk-title">Week 1</h2><p id="log-wk-dates">Mar 30 – Apr 5</p></div>
+        <div class="wk-btn" id="next-wk">›</div>
+      </div>
+      <div style="margin:0 16px 10px;display:flex;justify-content:space-between;align-items:center">
+        <span class="phase-badge phase-F" id="log-phase">Foundation</span>
+        <span style="font-size:11px;color:var(--text2)">Sched: <span style="font-family:var(--mono);color:var(--text)" id="log-sched">0 mi</span></span>
+      </div>
+      <div class="card" style="padding:12px 14px"><div id="day-rows"></div></div>
+      <div class="btn-row"><button class="btn btn-primary" id="save-btn">Save Week</button></div>
+      <div style="margin:10px 16px 0">
+        <div class="wk-total-banner">
+          <div class="wk-total-row">
+            <div><div class="wk-total-lbl">Week Total</div><div class="wk-total-val" id="log-total">0.0 mi</div></div>
+            <div style="text-align:right"><div class="wk-total-lbl">vs scheduled</div><div class="wk-diff" id="log-diff">—</div></div>
+          </div>
+          <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;justify-content:space-between;align-items:center">
+            <div class="wk-total-lbl">Week avg pace</div>
+            <div class="wk-avg-pace" id="log-avg-pace">— min/mi</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div class="screen" id="s-sched">
+      <div class="hdr"><div><h1>Schedule</h1><div class="hdr-sub">All 31 weeks · Nov 1 race day</div></div></div>
+      <div class="card" style="padding:10px 14px"><div id="sched-list"></div></div>
+    </div>
+
+    <!-- PACE LOG -->
+    <div class="screen" id="s-pace">
+      <div class="hdr"><div><h1>Pace Log</h1><div class="hdr-sub">All timed runs</div></div></div>
+      <div class="metric-grid">
+        <div class="metric"><div class="metric-label">Best Pace</div><div class="metric-val" id="pl-best" style="color:var(--teal);font-size:18px">—</div><div class="metric-sub">min / mile</div></div>
+        <div class="metric"><div class="metric-label">Overall Avg</div><div class="metric-val" id="pl-avg" style="color:var(--accent2);font-size:18px">—</div><div class="metric-sub">min / mile</div></div>
+      </div>
+      <div class="card" style="padding:10px 14px">
+        <div style="display:flex;gap:6px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);width:28px">WK</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);flex:1">DAY / WORKOUT</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);width:40px;text-align:right">MILES</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);width:36px;text-align:right">MINS</div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);width:50px;text-align:right">PACE</div>
+        </div>
+        <div id="pace-list"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav class="nav">
+    <button class="nav-btn active" data-s="s-dash">
+      <svg viewBox="0 0 22 22"><rect x="2" y="2" width="8" height="8" rx="2"/><rect x="12" y="2" width="8" height="8" rx="2"/><rect x="2" y="12" width="8" height="8" rx="2"/><rect x="12" y="12" width="8" height="8" rx="2"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-btn" data-s="s-log">
+      <svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="9"/><polyline points="11,7 11,11 14,13"/></svg>
+      Log Miles
+    </button>
+    <button class="nav-btn" data-s="s-sched">
+      <svg viewBox="0 0 22 22"><rect x="3" y="4" width="16" height="16" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="3" y1="10" x2="19" y2="10"/></svg>
+      Schedule
+    </button>
+    <button class="nav-btn" data-s="s-pace">
+      <svg viewBox="0 0 22 22"><polyline points="2,16 7,9 11,13 15,7 20,10"/><circle cx="20" cy="4" r="2" fill="currentColor"/></svg>
+      Pace Log
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── SUPABASE CONFIG ───────────────────────────────────────────────────────────
+// REPLACE THESE with your own Supabase project URL and anon key
+// Get them free at https://supabase.com → New Project → Project Settings → API
+const SUPABASE_URL = 'https://mbafhczmguhghjlqrjxd.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_UU9oiwrLd2oqDIvedvbL9Q_lHz3MDJB';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── TRAINING DATA ─────────────────────────────────────────────────────────────
+const RACE=new Date('2026-11-01'),W1_MON=new Date('2026-03-30'),CIRC=414.69;
+const WEEKS=[
+  {ph:'Foundation',days:[{d:'Mon',a:'Walk 20min',s:0},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Walk 25min',s:0},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk 30min',s:0},{d:'Sat',a:'Walk 40min',s:2.5},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Foundation',days:[{d:'Mon',a:'Walk 30min',s:0},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Walk/Run 2mi',s:2},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk 30min',s:0},{d:'Sat',a:'Walk 45min',s:2.8},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Foundation',days:[{d:'Mon',a:'Walk/Run 2mi',s:2},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Walk/Run 2.5mi',s:2.5},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk 2mi',s:0},{d:'Sat',a:'Walk/Run 3mi',s:3},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Foundation',days:[{d:'Mon',a:'Walk/Run 2.5mi',s:2.5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Walk/Run 3mi',s:3},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk 2mi',s:0},{d:'Sat',a:'Walk/Run 4mi',s:4},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Foundation',days:[{d:'Mon',a:'Run 2mi',s:2},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 2.5mi',s:2.5},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk/Run 2mi',s:2},{d:'Sat',a:'Run/Walk 5mi',s:5},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Foundation',days:[{d:'Mon',a:'Run 2.5mi',s:2.5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 3mi',s:3},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Walk 2mi',s:0},{d:'Sat',a:'Run 6mi',s:6},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 3mi',s:3},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 3mi',s:3},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 2mi',s:2},{d:'Sat',a:'Run 7mi',s:7},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 3mi',s:3},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 4mi',s:4},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 2mi',s:2},{d:'Sat',a:'Run 8mi',s:8},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 4mi',s:4},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 4mi',s:4},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 3mi',s:3},{d:'Sat',a:'Run 9mi',s:9},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 4mi',s:4},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 5mi',s:5},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 3mi',s:3},{d:'Sat',a:'Run 10mi',s:10},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 4mi',s:4},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 5mi',s:5},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 3mi',s:3},{d:'Sat',a:'Run 11mi',s:11},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 6mi',s:6},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 4mi',s:4},{d:'Sat',a:'Run 12mi',s:12},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 6mi',s:6},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 4mi',s:4},{d:'Sat',a:'Run 13mi',s:13},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Base Build',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 6mi',s:6},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 4mi',s:4},{d:'Sat',a:'Run 14mi',s:14},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 7mi',s:7},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 15mi',s:15},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 7mi',s:7},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 16mi',s:16},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 14mi',s:14},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 17mi',s:17},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 18mi',s:18},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 16mi',s:16},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 19mi',s:19},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 7mi',s:7},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 9mi',s:9},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 6mi',s:6},{d:'Sat',a:'Run 20mi',s:20},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 7mi',s:7},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 9mi',s:9},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 6mi',s:6},{d:'Sat',a:'Run 18mi',s:18},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 7mi',s:7},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 9mi',s:9},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 6mi',s:6},{d:'Sat',a:'Run 20mi',s:20},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 6mi',s:6},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 8mi',s:8},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 5mi',s:5},{d:'Sat',a:'Run 16mi',s:16},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Peak',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 7mi',s:7},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 4mi',s:4},{d:'Sat',a:'Run 12mi',s:12},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Taper',days:[{d:'Mon',a:'Run 5mi',s:5},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 6mi',s:6},{d:'Thu',a:'Cross-Train',s:0},{d:'Fri',a:'Run 4mi',s:4},{d:'Sat',a:'Run 10mi',s:10},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Taper',days:[{d:'Mon',a:'Run 4mi',s:4},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 5mi',s:5},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Run 3mi',s:3},{d:'Sat',a:'Run 8mi',s:8},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Taper',days:[{d:'Mon',a:'Run 4mi',s:4},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 5mi',s:5},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Run 3mi',s:3},{d:'Sat',a:'Run 6mi',s:6},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Taper',days:[{d:'Mon',a:'Run 3mi',s:3},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 4mi',s:4},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Run 2mi',s:2},{d:'Sat',a:'Run 4mi',s:4},{d:'Sun',a:'Rest',s:0}]},
+  {ph:'Taper',days:[{d:'Mon',a:'Run 2mi',s:2},{d:'Tue',a:'Rest',s:0},{d:'Wed',a:'Run 3mi',s:3},{d:'Thu',a:'Rest',s:0},{d:'Fri',a:'Rest',s:0},{d:'Sat',a:'Rest',s:0},{d:'Sun',a:'MARATHON! 26.2mi',s:26.2}]},
+];
+const PH_CODE={Foundation:'F','Base Build':'B',Peak:'P',Taper:'T'};
+const PH_COL={Foundation:'#4A9EFF','Base Build':'#3DD68C',Peak:'#FFB347',Taper:'#FF6B6B'};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let currentUser=null;
+let stored={};  // {wi: {di: {mi, mins}}}
+let authMode='signin';
+let saveQueue=[];
+let isSyncing=false;
+
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+function switchTab(mode){
+  authMode=mode;
+  document.getElementById('tab-signin').classList.toggle('active',mode==='signin');
+  document.getElementById('tab-signup').classList.toggle('active',mode==='signup');
+  document.getElementById('auth-submit').textContent=mode==='signin'?'Sign In':'Create Account';
+  document.getElementById('auth-name-wrap').style.display=mode==='signup'?'block':'none';
+  document.getElementById('auth-divider-note').textContent=mode==='signin'?'No account yet? Switch to Create Account above':'Already have an account? Switch to Sign In above';
+  document.getElementById('auth-err').textContent='';
+}
+
+async function submitAuth(){
+  const email=document.getElementById('auth-email').value.trim();
+  const password=document.getElementById('auth-password').value;
+  const name=document.getElementById('auth-name').value.trim();
+  const btn=document.getElementById('auth-submit');
+  const errEl=document.getElementById('auth-err');
+  errEl.textContent='';
+  if(!email||!password){errEl.textContent='Please enter email and password.';return;}
+  btn.disabled=true;
+  btn.textContent=authMode==='signin'?'Signing in…':'Creating account…';
+  try{
+    if(authMode==='signup'){
+      const{data,error}=await sb.auth.signUp({email,password,options:{data:{full_name:name||email.split('@')[0]}}});
+      if(error)throw error;
+      errEl.style.color='var(--green)';
+      errEl.textContent='Account created! Check your email to confirm, then sign in.';
+      switchTab('signin');
+    } else {
+      const{data,error}=await sb.auth.signInWithPassword({email,password});
+      if(error)throw error;
+    }
+  } catch(e){
+    errEl.style.color='var(--red)';
+    errEl.textContent=e.message||'Something went wrong.';
+  }
+  btn.disabled=false;
+  btn.textContent=authMode==='signin'?'Sign In':'Create Account';
+}
+
+async function showUserMenu(){
+  if(confirm(`Signed in as ${currentUser?.email}\n\nSign out?`)){
+    await sb.auth.signOut();
+  }
+}
+
+// ── DB OPERATIONS ─────────────────────────────────────────────────────────────
+async function loadFromDB(userId){
+  setSyncState('syncing');
+  try{
+    const{data,error}=await sb.from('runs').select('*').eq('user_id',userId);
+    if(error)throw error;
+    stored={};
+    data.forEach(r=>{
+      if(!stored[r.week_index])stored[r.week_index]={};
+      stored[r.week_index][r.day_index]={mi:r.miles,mins:r.minutes};
+    });
+    // also save to localStorage as offline cache
+    localStorage.setItem('mt_cache_'+userId,JSON.stringify(stored));
+    setSyncState('synced');
+  } catch(e){
+    // offline — load from cache
+    const cached=localStorage.getItem('mt_cache_'+userId);
+    if(cached)stored=JSON.parse(cached);
+    setSyncState('offline');
+  }
+}
+
+async function saveToDB(userId,wi,di,rec){
+  setSyncState('syncing');
+  // optimistic local update
+  if(!stored[wi])stored[wi]={};
+  stored[wi][di]=rec;
+  localStorage.setItem('mt_cache_'+userId,JSON.stringify(stored));
+  try{
+    const{error}=await sb.from('runs').upsert({
+      user_id:userId,week_index:parseInt(wi),day_index:parseInt(di),
+      miles:rec.mi,minutes:rec.mins,updated_at:new Date().toISOString()
+    },{onConflict:'user_id,week_index,day_index'});
+    if(error)throw error;
+    setSyncState('synced');
+  } catch(e){
+    setSyncState('offline');
+    toast('Saved locally — will sync when online','#FFB347');
+  }
+}
+
+function setSyncState(state){
+  const dot=document.getElementById('sync-dot');
+  dot.className='sync-dot '+state;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function getRec(wi,di){return(stored[wi]||{})[di]||{mi:0,mins:0}}
+function getA(wi,di){return getRec(wi,di).mi}
+function calcPace(mi,mins){
+  if(!mi||!mins||mi<=0||mins<=0)return null;
+  const ppm=mins/mi,m=Math.floor(ppm),s=Math.round((ppm-m)*60);
+  return`${m}:${s.toString().padStart(2,'0')}`;
+}
+function calcPaceSec(mi,mins){return(mi>0&&mins>0)?mins*60/mi:null}
+function secToStr(sec){const m=Math.floor(sec/60),s=Math.round(sec%60);return`${m}:${s.toString().padStart(2,'0')}`}
+function wkDates(i){
+  const mon=new Date(W1_MON);mon.setDate(mon.getDate()+i*7);
+  const sun=new Date(mon);sun.setDate(sun.getDate()+6);
+  const f=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  const fm=d=>d.toLocaleDateString([],{month:'short',day:'numeric'});
+  return{mon,sun,short:`${f(mon)}–${f(sun)}`,nice:`${fm(mon)} – ${fm(sun)}`};
+}
+function wkSched(i){return WEEKS[i].days.reduce((s,d)=>s+d.s,0)}
+function wkActual(wi){return WEEKS[wi].days.reduce((s,_,di)=>s+getA(wi,di),0)}
+function totalSched(){return WEEKS.reduce((s,_,i)=>s+wkSched(i),0)}
+function totalActual(){return WEEKS.reduce((s,_,i)=>s+wkActual(i),0)}
+function wkDone(wi){const s=wkSched(wi);return s>0&&wkActual(wi)>=s*0.9}
+function fmt1(n){return parseFloat(n.toFixed(1))}
+function curWeek(){const now=new Date();for(let i=0;i<31;i++){const{mon,sun}=wkDates(i);if(now>=mon&&now<=sun)return i;}return 30;}
+function allPaceStats(){
+  let best=Infinity,tmi=0,tmins=0;
+  for(let wi=0;wi<31;wi++)for(let di=0;di<7;di++){
+    const{mi,mins}=getRec(wi,di);
+    if(mi>0&&mins>0){const ps=calcPaceSec(mi,mins);if(ps&&ps<best)best=ps;tmi+=mi;tmins+=mins;}
+  }
+  return{best:best<Infinity?secToStr(best):null,avg:tmi>0&&tmins>0?calcPace(tmi,tmins):null};
+}
+function wkAvgPace(wi){
+  let tmi=0,tmins=0;
+  for(let di=0;di<7;di++){const{mi,mins}=getRec(wi,di);if(mi>0&&mins>0){tmi+=mi;tmins+=mins;}}
+  return tmi>0&&tmins>0?calcPace(tmi,tmins):null;
+}
+function isRunDay(day){return day.s>0||day.a.includes('Run')||day.a.includes('Walk')||day.a.includes('MARATHON')}
+function toast(msg,bg='#3DD68C'){
+  const t=document.getElementById('toast');t.style.background=bg;t.textContent=msg;
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);
+}
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+const renderers={'s-dash':renderDash,'s-log':renderLog,'s-sched':renderSched,'s-pace':renderPaceLog};
+document.querySelectorAll('.nav-btn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const s=b.dataset.s;
+    document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(x=>x.classList.remove('active'));
+    document.getElementById(s).classList.add('active');
+    b.classList.add('active');
+    renderers[s]&&renderers[s]();
+  });
+});
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function renderDash(){
+  const now=new Date();
+  document.getElementById('dash-date').textContent=now.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+  const dLeft=Math.ceil((RACE-now)/864e5);
+  document.getElementById('days-left').textContent=dLeft>0?dLeft:'Race!';
+  const ta=totalActual(),ts=totalSched(),pct=ts>0?ta/ts:0;
+  document.getElementById('ring').style.strokeDashoffset=CIRC*(1-Math.min(pct,1));
+  document.getElementById('ring-pct').textContent=Math.round(pct*100)+'%';
+  document.getElementById('ring-mi').textContent=`${fmt1(ta)} / ${Math.round(ts)} mi`;
+  const cw=curWeek();
+  document.getElementById('r-thisweek').textContent=fmt1(wkActual(cw));
+  const{best,avg}=allPaceStats();
+  document.getElementById('r-avgpace').textContent=avg||'—';
+  document.getElementById('m-bestpace').textContent=best||'—';
+  let bestLong=0;for(let i=0;i<31;i++){const v=getA(i,5);if(v>bestLong)bestLong=v;}
+  document.getElementById('r-longbest').textContent=fmt1(bestLong);
+  document.getElementById('m-act').textContent=fmt1(ta);
+  document.getElementById('m-sched').textContent=Math.round(ts);
+  document.getElementById('m-wks').textContent=WEEKS.filter((_,i)=>wkActual(i)>0).length;
+  const diff=ta-ts;const de=document.getElementById('m-diff');
+  de.textContent=(diff>=0?'+':'')+fmt1(diff);de.style.color=diff>=0?'var(--green)':'var(--red)';
+  const seen=[];for(let i=0;i<31&&seen.length<8;i++){if(wkActual(i)>0||i<=cw)seen.push(i);}
+  const last8=seen.slice(-8),maxM=Math.max(1,...last8.map(i=>Math.max(wkSched(i),wkActual(i))));
+  document.getElementById('chart').innerHTML=last8.map(i=>{
+    const sc=wkSched(i),ac=wkActual(i),sh=Math.max(2,Math.round((sc/maxM)*66)),ah=Math.max(2,Math.round((ac/maxM)*66));
+    return`<div class="cbar-group"><div class="cbar-inner"><div class="cbar" style="height:${sh}px;background:var(--border2)"></div><div class="cbar" style="height:${ah}px;background:${ac>=sc&&ac>0?'var(--green)':'var(--accent)'}"></div></div><div class="cbar-lbl">W${i+1}</div></div>`;
+  }).join('');
+  let longest=0;for(let i=0;i<31;i++)WEEKS[i].days.forEach((_,di)=>{const v=getA(i,di);if(v>longest)longest=v;});
+  let streak=0;for(let i=cw-1;i>=0;i--){if(wkDone(i))streak++;else break;}
+  const achs=[
+    {i:'🎯',n:'First Mile',s:'Log your first run',u:ta>0},
+    {i:'🔥',n:'On Fire',s:'3+ week streak',u:streak>=3},
+    {i:'⚡',n:'Speed Check',s:'Log your first timed run',u:!!best},
+    {i:'🏃',n:'10-Miler',s:'10+ miles in one run',u:longest>=10},
+    {i:'🦁',n:'20-Miler',s:'Complete 20mi long run',u:bestLong>=20},
+    {i:'🏆',n:'Finisher',s:'Race day complete!',u:getA(30,6)>0},
+  ];
+  document.getElementById('ach-grid').innerHTML=achs.map(a=>`<div class="ach${a.u?'':' locked'}"><div class="ach-ico">${a.i}</div><div><div class="ach-name">${a.n}</div><div class="ach-sub">${a.s}</div></div></div>`).join('');
+}
+
+// ── LOG ───────────────────────────────────────────────────────────────────────
+let logWk=curWeek();
+function renderLog(){
+  const w=WEEKS[logWk],wd=wkDates(logWk);
+  document.getElementById('log-wk-title').textContent=`Week ${logWk+1}`;
+  document.getElementById('log-wk-dates').textContent=wd.nice;
+  document.getElementById('log-phase').textContent=w.ph;
+  document.getElementById('log-phase').className=`phase-badge phase-${PH_CODE[w.ph]}`;
+  document.getElementById('log-sched').textContent=fmt1(wkSched(logWk))+' mi';
+  const dayDate=di=>{const dt=new Date(wd.mon);dt.setDate(dt.getDate()+di);return`${dt.getMonth()+1}/${dt.getDate()}`;};
+  document.getElementById('day-rows').innerHTML=w.days.map((day,di)=>{
+    const rec=getRec(logWk,di),runDay=isRunDay(day),pace=calcPace(rec.mi,rec.mins);
+    if(!runDay)return`<div class="day-row"><div class="day-top"><div class="day-d">${day.d}</div><div class="day-info"><div class="day-act">${day.a}</div><div class="day-date-lbl">${dayDate(di)}</div></div><div style="font-size:10px;color:var(--text3);font-family:var(--mono)">${day.a==='Cross-Train'?'X-Train':'Rest'}</div></div></div>`;
+    return`<div class="day-row">
+      <div class="day-top"><div class="day-d">${day.d}</div><div class="day-info"><div class="day-act">${day.a}</div><div class="day-date-lbl">${dayDate(di)}</div></div><div class="day-sched">${day.s>0?day.s+'mi':'—'}</div></div>
+      <div class="day-inputs">
+        <div class="inp-group"><div class="inp-label">Miles</div><input class="day-inp" type="number" inputmode="decimal" min="0" max="40" step="0.1" placeholder="0.0" value="${rec.mi||''}" data-di="${di}" data-type="mi"></div>
+        <div class="inp-group"><div class="inp-label">Minutes</div><input class="day-inp" type="number" inputmode="decimal" min="0" max="600" step="1" placeholder="0" value="${rec.mins||''}" data-di="${di}" data-type="mins"></div>
+      </div>
+      <div class="pace-pill${pace?'':' hidden'}" id="pp-${di}"><div class="pace-dot"></div><span id="pv-${di}">${pace||''}</span>&nbsp;min/mi</div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.day-inp').forEach(inp=>inp.addEventListener('input',()=>onInput(inp)));
+  calcTotals();
+}
+function onInput(inp){
+  const di=parseInt(inp.dataset.di);
+  const mi=parseFloat(document.querySelector(`.day-inp[data-di="${di}"][data-type="mi"]`)?.value)||0;
+  const mins=parseFloat(document.querySelector(`.day-inp[data-di="${di}"][data-type="mins"]`)?.value)||0;
+  const pace=calcPace(mi,mins);
+  const pill=document.getElementById(`pp-${di}`),val=document.getElementById(`pv-${di}`);
+  if(pill&&val){if(pace){val.textContent=pace;pill.classList.remove('hidden');}else pill.classList.add('hidden');}
+  calcTotals();
+}
+function calcTotals(){
+  let tmi=0,tmins=0;
+  document.querySelectorAll('.day-inp[data-type="mi"]').forEach(i=>{tmi+=parseFloat(i.value)||0;});
+  document.querySelectorAll('.day-inp[data-type="mins"]').forEach(i=>{tmins+=parseFloat(i.value)||0;});
+  const sc=wkSched(logWk),diff=tmi-sc;
+  document.getElementById('log-total').textContent=fmt1(tmi)+' mi';
+  const de=document.getElementById('log-diff');
+  de.textContent=(diff>=0?'+':'')+fmt1(diff)+' mi';de.style.color=diff>=0?'var(--green)':'var(--red)';
+  document.getElementById('log-avg-pace').textContent=(calcPace(tmi,tmins)||'—')+' min/mi';
+}
+document.getElementById('prev-wk').addEventListener('click',()=>{if(logWk>0){logWk--;renderLog();}});
+document.getElementById('next-wk').addEventListener('click',()=>{if(logWk<30){logWk++;renderLog();}});
+document.getElementById('save-btn').addEventListener('click',async()=>{
+  if(!currentUser)return;
+  const btn=document.getElementById('save-btn');
+  btn.textContent='Saving…';btn.disabled=true;
+  const saves=[];
+  document.querySelectorAll('.day-inp[data-type="mi"]').forEach(miInp=>{
+    const di=parseInt(miInp.dataset.di);
+    const minsInp=document.querySelector(`.day-inp[data-di="${di}"][data-type="mins"]`);
+    const rec={mi:parseFloat(miInp.value)||0,mins:parseFloat(minsInp?.value)||0};
+    saves.push(saveToDB(currentUser.id,logWk,di,rec));
+  });
+  await Promise.all(saves);
+  btn.textContent='Save Week';btn.disabled=false;
+  toast(`Week ${logWk+1} saved! 💪`);
+});
+
+// ── SCHEDULE ──────────────────────────────────────────────────────────────────
+function renderSched(){
+  const cw=curWeek();
+  document.getElementById('sched-list').innerHTML=WEEKS.map((w,i)=>{
+    const wd=wkDates(i),sc=wkSched(i),ac=wkActual(i),pct=sc>0?Math.min(ac/sc,1):0;
+    const col=PH_COL[w.ph],pace=wkAvgPace(i),isNow=i===cw;
+    return`<div class="wk-list-row" style="${isNow?'background:var(--surface2);border-radius:10px;margin:0 -14px;padding:10px 14px;':''}">
+      <div class="wk-num-circle" style="background:${col}22;color:${col}">${i+1}</div>
+      <div class="wk-list-info"><div class="wk-list-name">${wkDone(i)?'✓ ':''}${w.ph}${isNow?' · Now':''}</div><div class="wk-list-dates">${wd.short}${pace?` · ${pace}/mi`:''}</div></div>
+      <div class="mini-prog"><div class="mini-bar-bg"><div class="mini-bar-fill" style="width:${Math.round(pct*100)}%;background:${col}"></div></div><div class="mini-pct">${fmt1(ac)}/${fmt1(sc)}mi</div></div>
+      ${isNow?'<div class="now-badge">Now</div>':''}
+    </div>`;
+  }).join('');
+}
+
+// ── PACE LOG ──────────────────────────────────────────────────────────────────
+function renderPaceLog(){
+  const{best,avg}=allPaceStats();
+  document.getElementById('pl-best').textContent=best||'—';
+  document.getElementById('pl-avg').textContent=avg||'—';
+  const rows=[];
+  for(let wi=0;wi<31;wi++)WEEKS[wi].days.forEach((day,di)=>{
+    const{mi,mins}=getRec(wi,di);
+    if(mi>0)rows.push({wi,di,day,mi,mins,pace:calcPace(mi,mins)});
+  });
+  if(!rows.length){
+    document.getElementById('pace-list').innerHTML=`<div style="text-align:center;padding:28px 16px;color:var(--text3);font-size:13px;line-height:1.6">No runs logged yet.</div>`;
+    return;
+  }
+  document.getElementById('pace-list').innerHTML=rows.map(r=>`<div class="pace-tbl-row">
+    <div style="font-size:11px;font-family:var(--mono);color:var(--text2);width:28px;flex-shrink:0">W${r.wi+1}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.day.d} · ${r.day.a}</div></div>
+    <div style="font-size:12px;font-family:var(--mono);width:40px;text-align:right">${fmt1(r.mi)}</div>
+    <div style="font-size:12px;font-family:var(--mono);width:36px;text-align:right;color:var(--text2)">${r.mins>0?Math.round(r.mins):'—'}</div>
+    <div style="font-size:12px;font-family:var(--mono);width:50px;text-align:right;color:${r.pace?'var(--teal)':'var(--text3)'};font-weight:500">${r.pace||'—'}</div>
+  </div>`).join('');
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+async function boot(session){
+  currentUser=session?.user||null;
+  if(!currentUser){
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('loading').classList.add('hidden');
+    return;
+  }
+  // show loading, hide auth
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  // set user chip
+  const name=currentUser.user_metadata?.full_name||currentUser.email.split('@')[0];
+  document.getElementById('user-name').textContent=name;
+  document.getElementById('user-avatar').textContent=name[0].toUpperCase();
+  // load data
+  await loadFromDB(currentUser.id);
+  logWk=curWeek();
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('app').classList.add('ready');
+  tick();setInterval(tick,15000);
+  renderDash();
+}
+
+// Auth state listener
+sb.auth.onAuthStateChange((_event,session)=>{
+  boot(session);
+});
+
+// Check initial session
+sb.auth.getSession().then(({data:{session}})=>{
+  if(!session){
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('auth-screen').classList.remove('hidden');
+  }
+});
+
+// SW registration + update detection
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller){
+          document.getElementById('update-banner').classList.add('show');
+        }
+      });
+    });
+  });
+  navigator.serviceWorker.addEventListener('message',e=>{
+    if(e.data?.type==='SW_UPDATED')document.getElementById('update-banner').classList.add('show');
+  });
+}
+</script>
+</body>
+</html>
