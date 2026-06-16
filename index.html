@@ -559,8 +559,8 @@ function renderDash(){
   document.getElementById('m-wks').textContent=WEEKS.filter((_,i)=>wkActual(i)>0).length;
   const diff=ta-ts;const de=document.getElementById('m-diff');
   de.textContent=(diff>=0?'+':'')+fmt1(diff);de.style.color=diff>=0?'var(--green)':'var(--red)';
-  const seen=[];for(let i=0;i<31&&seen.length<8;i++){if(wkActual(i)>0||i<=cw)seen.push(i);}
-  const last8=seen.slice(-8),maxM=Math.max(1,...last8.map(i=>Math.max(wkSched(i),wkActual(i))));
+  const winStart=Math.max(0,cw-9),last8=[];for(let i=winStart;i<=cw;i++)last8.push(i);
+  const maxM=Math.max(1,...last8.map(i=>Math.max(wkSched(i),wkActual(i))));
   document.getElementById('chart').innerHTML=last8.map(i=>{
     const sc=wkSched(i),ac=wkActual(i),sh=Math.max(2,Math.round((sc/maxM)*66)),ah=Math.max(2,Math.round((ac/maxM)*66));
     return`<div class="cbar-group"><div class="cbar-inner"><div class="cbar" style="height:${sh}px;background:var(--border2)"></div><div class="cbar" style="height:${ah}px;background:${ac>=sc&&ac>0?'var(--green)':'var(--accent)'}"></div></div><div class="cbar-lbl">W${i+1}</div></div>`;
